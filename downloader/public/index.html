@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Download PW lectures as MP4 videos with quality selection" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>PW Video Downloader</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>" />
+</head>
+<body>
+  <!-- Background -->
+  <div class="bg-gradient"></div>
+  <div class="bg-grid"></div>
+
+  <!-- DevTools Warning Overlay -->
+  <div class="devtools-warning" id="devtoolsWarning">
+    <div style="font-size: 64px; margin-bottom: 16px;">🔒</div>
+    <h2>Developer Tools Detected</h2>
+    <p>For security, this application does not allow DevTools to be opened. Please close Developer Tools to continue.</p>
+  </div>
+
+  <!-- Success Overlay -->
+  <div class="success-overlay" id="successOverlay">
+    <div class="success-content">
+      <div class="success-icon">✅</div>
+      <h2 class="success-title">Download Complete!</h2>
+      <p class="success-message">Your lecture has been downloaded successfully.</p>
+    </div>
+  </div>
+
+  <!-- Main Container -->
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="header-icon">🎬</div>
+      <h1>Video Downloader</h1>
+      <p>Download lectures as MP4 files</p>
+    </div>
+
+    <!-- Download Card -->
+    <div class="download-card" id="downloadCard">
+      <!-- Loading State -->
+      <div class="loading-state" id="loadingState">
+        <div class="spinner"></div>
+        <div class="loading-text">Fetching lecture info...</div>
+        <div class="loading-sub">Resolving video stream</div>
+      </div>
+
+      <!-- Error State -->
+      <div class="error-state" id="errorState" style="display: none;">
+        <div class="error-icon">⚠️</div>
+        <div class="error-title">Failed to Load</div>
+        <div class="error-message" id="errorMessage">Something went wrong while fetching the lecture.</div>
+        <button class="retry-btn" onclick="fetchVideoInfo()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+            <path d="M1 4v6h6M23 20v-6h-6" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Retry
+        </button>
+      </div>
+
+      <!-- Content State -->
+      <div id="contentState" style="display: none;">
+        <!-- Thumbnail -->
+        <div class="thumbnail-wrapper" id="thumbnailWrapper">
+          <div class="thumbnail-placeholder" id="thumbnailPlaceholder">🎥</div>
+          <img id="thumbnailImg" src="" alt="Lecture Thumbnail" style="display: none;" />
+          <div class="thumbnail-overlay"></div>
+          <div class="thumbnail-badge" id="thumbnailBadge">M3U8 → MP4</div>
+        </div>
+
+        <!-- Lecture Name -->
+        <h2 class="lecture-name" id="lectureName">Loading...</h2>
+        <p class="lecture-meta" id="lectureMeta">Preparing download...</p>
+
+        <div class="divider"></div>
+
+        <!-- Quality Selector -->
+        <div class="quality-section">
+          <div class="quality-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20V10M18 20V4M6 20v-4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Select Quality
+          </div>
+          <div class="quality-grid" id="qualityGrid">
+            <!-- Quality options injected by JS -->
+          </div>
+        </div>
+
+        <!-- Download Button -->
+        <button class="download-btn" id="downloadBtn" disabled onclick="startDownload()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="7 10 12 15 17 10" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="12" y1="15" x2="12" y2="3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span id="downloadBtnText">Select a Quality</span>
+        </button>
+
+        <!-- Progress -->
+        <div class="progress-section" id="progressSection">
+          <div class="progress-header">
+            <span class="progress-status" id="progressStatus">Downloading...</span>
+            <span class="progress-percent" id="progressPercent">0%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <div class="progress-detail" id="progressDetail">Starting download...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      Powered by CODEWITH-VIVEK • Secure Download
+    </div>
+  </div>
+
+  <script>
+    // =============================================
+    // DevTools Detection & Protection
+    // =============================================
+    (function() {
+      const devtoolsWarning = document.getElementById('devtoolsWarning');
+
+      // Block keyboard shortcuts
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'F12') { e.preventDefault(); e.stopPropagation(); return false; }
+        if (e.ctrlKey && e.shiftKey && ['I','J','C','i','j','c'].includes(e.key)) {
+          e.preventDefault(); e.stopPropagation(); return false;
+        }
+        if (e.ctrlKey && (e.key === 'U' || e.key === 'u')) {
+          e.preventDefault(); e.stopPropagation(); return false;
+        }
+      }, true);
+
+      // Block right-click
+      document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+      }, true);
+
+      // Debugger detection loop
+      let devtoolsOpen = false;
+      const threshold = 160;
+
+      function checkDevTools() {
+        const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+        const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+
+        if (widthThreshold || heightThreshold) {
+          if (!devtoolsOpen) {
+            devtoolsOpen = true;
+            devtoolsWarning.classList.add('active');
+          }
+        } else {
+          if (devtoolsOpen) {
+            devtoolsOpen = false;
+            devtoolsWarning.classList.remove('active');
+          }
+        }
+      }
+
+      setInterval(checkDevTools, 1000);
+
+      // Console.log detection
+      const el = new Image();
+      Object.defineProperty(el, 'id', {
+        get: function() {
+          devtoolsOpen = true;
+          devtoolsWarning.classList.add('active');
+        }
+      });
+
+      // Disable console in production
+      if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        const noop = function() {};
+        ['log', 'debug', 'info', 'warn', 'error', 'table', 'trace'].forEach(method => {
+          console[method] = noop;
+        });
+      }
+    })();
+
+    // =============================================
+    // Application State
+    // =============================================
+    let videoData = null;
+    let selectedQualityUrl = null;
+    let selectedQualityLabel = '';
+    let isDownloading = false;
+
+    // Read query params
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token') || '';
+
+    // =============================================
+    // DOM Elements
+    // =============================================
+    const loadingState = document.getElementById('loadingState');
+    const errorState = document.getElementById('errorState');
+    const contentState = document.getElementById('contentState');
+    const errorMessage = document.getElementById('errorMessage');
+    const lectureNameEl = document.getElementById('lectureName');
+    const lectureMetaEl = document.getElementById('lectureMeta');
+    const thumbnailImg = document.getElementById('thumbnailImg');
+    const thumbnailPlaceholder = document.getElementById('thumbnailPlaceholder');
+    const qualityGrid = document.getElementById('qualityGrid');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const downloadBtnText = document.getElementById('downloadBtnText');
+    const progressSection = document.getElementById('progressSection');
+    const progressStatus = document.getElementById('progressStatus');
+    const progressPercent = document.getElementById('progressPercent');
+    const progressFill = document.getElementById('progressFill');
+    const progressDetail = document.getElementById('progressDetail');
+    const successOverlay = document.getElementById('successOverlay');
+
+    // =============================================
+    // Fetch Video Info
+    // =============================================
+    async function fetchVideoInfo() {
+      if (!token) {
+        showError('Missing secure download token. Please open this page from the video player.');
+        return;
+      }
+
+      showLoading();
+
+      try {
+        const res = await fetch(`/api/video-info?token=${encodeURIComponent(token)}`);
+        const data = await res.json();
+
+        if (!res.ok || !data.success) {
+          showError(data.message || 'Failed to resolve download details or link expired.');
+          return;
+        }
+
+        videoData = data;
+
+        // Update lecture name & meta
+        const name = data.lectureName || 'Lecture';
+        lectureNameEl.textContent = name;
+        lectureMetaEl.textContent = `${data.qualities.length} quality options available`;
+
+        // Update thumbnail dynamically if returned
+        if (data.thumbnail) {
+          thumbnailImg.src = data.thumbnail;
+          thumbnailImg.style.display = 'block';
+          thumbnailPlaceholder.style.display = 'none';
+          thumbnailImg.onerror = function() {
+            thumbnailImg.style.display = 'none';
+            thumbnailPlaceholder.style.display = 'flex';
+          };
+        }
+
+        // Render quality options
+        renderQualities(data.qualities);
+        showContent();
+      } catch (err) {
+        showError('Network error: Could not connect to the server. Please check your connection and try again.');
+      }
+    }
+
+    // =============================================
+    // Render Quality Options
+    // =============================================
+    function renderQualities(qualities) {
+      qualityGrid.innerHTML = '';
+
+      if (!qualities || qualities.length === 0) {
+        // If no qualities parsed (single stream), show a default option
+        const option = document.createElement('div');
+        option.className = 'quality-option selected';
+        option.textContent = 'Original';
+        option.addEventListener('click', () => selectQuality(null, 'Original', option));
+        qualityGrid.appendChild(option);
+        selectQuality(null, 'Original', option);
+        return;
+      }
+
+      const highest = qualities[qualities.length - 1];
+
+      qualities.forEach((q, index) => {
+        const option = document.createElement('div');
+        option.className = 'quality-option';
+        option.textContent = q.label;
+
+        // Tags
+        if (q.height >= 1080) {
+          const tag = document.createElement('span');
+          tag.className = 'quality-tag hd';
+          tag.textContent = 'FHD';
+          option.appendChild(tag);
+        } else if (q.height >= 720) {
+          const tag = document.createElement('span');
+          tag.className = 'quality-tag hd';
+          tag.textContent = 'HD';
+          option.appendChild(tag);
+        }
+
+        // Recommend the highest by default
+        if (q === highest) {
+          const tag = document.createElement('span');
+          if (!option.querySelector('.quality-tag')) {
+            const recTag = document.createElement('span');
+            recTag.className = 'quality-tag recommended';
+            recTag.textContent = 'BEST';
+            option.appendChild(recTag);
+          }
+        }
+
+        option.addEventListener('click', () => selectQuality(q.url, q.label, option));
+        qualityGrid.appendChild(option);
+      });
+    }
+
+    function selectQuality(url, label, element) {
+      selectedQualityUrl = url;
+      selectedQualityLabel = label;
+
+      // Update selection UI
+      document.querySelectorAll('.quality-option').forEach(el => el.classList.remove('selected'));
+      element.classList.add('selected');
+
+      // Enable download button
+      downloadBtn.disabled = false;
+      downloadBtnText.textContent = `Download ${label}`;
+    }
+
+    // =============================================
+    // Start Download
+    // =============================================
+    // Helper to convert timemark (HH:MM:SS.ms) to seconds
+    function timemarkToSeconds(timemark) {
+      if (!timemark) return 0;
+      const parts = timemark.split(':');
+      if (parts.length !== 3) return 0;
+      return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseFloat(parts[2]);
+    }
+
+    // Helper to format seconds to HH:MM:SS
+    function formatTime(seconds) {
+      if (isNaN(seconds) || seconds <= 0) return '00:00:00';
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = Math.floor(seconds % 60);
+      return [
+        h.toString().padStart(2, "0"),
+        m.toString().padStart(2, "0"),
+        s.toString().padStart(2, "0")
+      ].join(":");
+    }
+
+    // =============================================
+    // Start Download
+    // =============================================
+    async function startDownload() {
+      if (isDownloading || !videoData) return;
+      isDownloading = true;
+
+      downloadBtn.disabled = true;
+      downloadBtnText.textContent = 'Preparing...';
+      progressSection.classList.add('active');
+      progressStatus.textContent = 'Initiating download...';
+      progressStatus.style.color = '';
+      progressPercent.textContent = '0%';
+      progressFill.style.width = '0%';
+      progressDetail.textContent = 'Connecting to video server...';
+
+      let iframe = null;
+      let pollInterval = null;
+      let iframeTriggered = false;
+
+      try {
+        const name = videoData.lectureName || 'Lecture';
+        const qualityParam = selectedQualityUrl || '';
+        const downloadId = 'dl_' + Math.random().toString(36).substr(2, 9);
+        const durationValue = videoData.duration || 0;
+
+        // 1. Request preparation from the server
+        const prepareUrl = `/api/prepare-download?token=${encodeURIComponent(token)}&quality=${encodeURIComponent(qualityParam)}&downloadId=${downloadId}`;
+        
+        const response = await fetch(prepareUrl);
+        const result = await response.json();
+        
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || 'Failed to start download preparation');
+        }
+
+        progressStatus.textContent = 'Downloading segments...';
+        progressDetail.textContent = 'Preparing parallel segment download...';
+
+        // 2. Poll the server-side progress endpoint
+        pollInterval = setInterval(async () => {
+          try {
+            const res = await fetch(`/api/download-progress?downloadId=${downloadId}`);
+            const progressData = await res.json();
+
+            if (progressData.success) {
+              if (progressData.status === 'downloading') {
+                let percent = progressData.percent || 0;
+
+                progressFill.style.width = `${percent}%`;
+                progressPercent.textContent = `${percent}%`;
+                progressStatus.textContent = 'Downloading segments...';
+                progressDetail.textContent = `Segments: ${progressData.downloadedSegments || 0} / ${progressData.totalSegments || 0} (${progressData.timemark || '00:00:00'} / ${formatTime(durationValue)})`;
+              } else if (progressData.status === 'converting') {
+                progressFill.style.width = '98%';
+                progressPercent.textContent = '98%';
+                progressStatus.textContent = 'Compiling MP4 file...';
+                progressDetail.textContent = 'Stitching segments and finalizing video container...';
+              } else if (progressData.status === 'completed') {
+                clearInterval(pollInterval);
+                progressFill.style.width = '100%';
+                progressPercent.textContent = '100%';
+                progressStatus.textContent = 'Download complete!';
+                progressDetail.textContent = `${name}.mp4 saved successfully`;
+                progressStatus.style.color = 'var(--success)';
+
+                // Trigger browser stream download via hidden iframe
+                if (!iframeTriggered) {
+                  iframeTriggered = true;
+                  const downloadUrl = `/api/download?downloadId=${downloadId}&lectureName=${encodeURIComponent(name)}`;
+                  iframe = document.createElement('iframe');
+                  iframe.style.display = 'none';
+                  iframe.src = downloadUrl;
+                  document.body.appendChild(iframe);
+                }
+
+                successOverlay.classList.add('active');
+                setTimeout(() => {
+                  successOverlay.classList.remove('active');
+                }, 3000);
+
+                isDownloading = false;
+                downloadBtn.disabled = false;
+                downloadBtnText.textContent = `Download ${selectedQualityLabel}`;
+
+                setTimeout(() => {
+                  if (iframe) iframe.remove();
+                }, 10000);
+              } else if (progressData.status === 'failed') {
+                clearInterval(pollInterval);
+                throw new Error(progressData.error || 'ffmpeg conversion failed');
+              } else if (progressData.status === 'cancelled') {
+                clearInterval(pollInterval);
+                throw new Error('Download cancelled by client connection drop.');
+              }
+            }
+          } catch (pollErr) {
+            clearInterval(pollInterval);
+            handleDownloadError(pollErr);
+          }
+        }, 1500);
+
+      } catch (err) {
+        if (pollInterval) clearInterval(pollInterval);
+        handleDownloadError(err);
+      }
+
+      function handleDownloadError(err) {
+        progressStatus.textContent = 'Download failed';
+        progressDetail.textContent = err.message || 'An error occurred during download';
+        progressStatus.style.color = 'var(--error)';
+        progressPercent.textContent = '✗';
+        isDownloading = false;
+        downloadBtn.disabled = false;
+        downloadBtnText.textContent = `Download ${selectedQualityLabel}`;
+        if (iframe) iframe.remove();
+      }
+    }
+
+    // =============================================
+    // UI State Helpers
+    // =============================================
+    function showLoading() {
+      loadingState.style.display = 'flex';
+      errorState.style.display = 'none';
+      contentState.style.display = 'none';
+    }
+
+    function showError(msg) {
+      loadingState.style.display = 'none';
+      errorState.style.display = 'block';
+      contentState.style.display = 'none';
+      errorMessage.textContent = msg;
+    }
+
+    function showContent() {
+      loadingState.style.display = 'none';
+      errorState.style.display = 'none';
+      contentState.style.display = 'block';
+    }
+
+    // =============================================
+    // Init
+    // =============================================
+    fetchVideoInfo();
+  </script>
+</body>
+</html>
